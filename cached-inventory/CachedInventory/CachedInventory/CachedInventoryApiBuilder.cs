@@ -42,8 +42,8 @@ public static class CachedInventoryApiBuilder
             return Results.BadRequest("Not enough stock.");
           }
           var newStock = currentStock - req.Amount;
-          await client.UpdateStock(req.ProductId, newStock);
-          return Results.Ok(new { req.ProductId, Amount = newStock});
+          var result = await client.UpdateStock(req.ProductId, newStock);
+          return Results.Ok(new { req.ProductId, Amount = result});
         })
       .WithName("RetrieveStock")
       .WithOpenApi();
@@ -55,8 +55,8 @@ public static class CachedInventoryApiBuilder
         {
           var currentStock = await client.GetStock(req.ProductId);
           var newStock = currentStock + req.Amount;
-          await client.UpdateStock(req.ProductId, newStock);
-          return Results.Ok(new { req.ProductId, Amount = newStock});
+          var result = await client.UpdateStock(req.ProductId, newStock);
+          return Results.Ok(new { req.ProductId, Amount = result});
         })
       .WithName("Restock")
       .WithOpenApi();
