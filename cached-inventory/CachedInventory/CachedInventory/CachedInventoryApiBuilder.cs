@@ -12,8 +12,8 @@ public static class CachedInventoryApiBuilder
     // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen();
-    builder.Services.AddScoped<IWarehouseStockSystemClient, WarehouseStockSystemClient>();
-    builder.Services.AddScoped<NewWarehouseStockSystem>();
+    builder.Services.AddSingleton<IWarehouseStockSystemClient, WarehouseStockSystemClient>();
+    builder.Services.AddSingleton<NewWarehouseStockSystem>();
 
     var app = builder.Build();
 
@@ -42,7 +42,7 @@ public static class CachedInventoryApiBuilder
             return Results.BadRequest("Not enough stock.");
           }
 
-          await client.RetrieveStock(req.ProductId, req.Amount);
+          await client.UpdateStock(req.ProductId, stock - req.Amount);
           return Results.Ok();
         })
       .WithName("RetrieveStock")
@@ -53,7 +53,8 @@ public static class CachedInventoryApiBuilder
         "/stock/restock",
         async ([FromServices] NewWarehouseStockSystem client, [FromBody] RestockRequest req) =>
         {
-          await client.Restock(req.ProductId, req.Amount);
+          var stock = await client.GetStock(req.ProductId);
+          await client.UpdateStock(req.ProductId, stock + req.Amount);
           return Results.Ok();
         })
       .WithName("Restock")
