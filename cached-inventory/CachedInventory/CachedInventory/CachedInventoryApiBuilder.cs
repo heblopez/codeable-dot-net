@@ -13,6 +13,7 @@ public static class CachedInventoryApiBuilder
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen();
     builder.Services.AddScoped<IWarehouseStockSystemClient, WarehouseStockSystemClient>();
+    builder.Services.AddScoped<NewWarehouseStockSystem>();
 
     var app = builder.Build();
 
@@ -27,13 +28,13 @@ public static class CachedInventoryApiBuilder
 
     app.MapGet(
         "/stock/{productId:int}",
-        async ([FromServices] IWarehouseStockSystemClient client, int productId) => await client.GetStock(productId))
+        async ([FromServices] NewWarehouseStockSystem client, int productId) => await client.GetStock(productId))
       .WithName("GetStock")
       .WithOpenApi();
 
     app.MapPost(
         "/stock/retrieve",
-        async ([FromServices] IWarehouseStockSystemClient client, [FromBody] RetrieveStockRequest req) =>
+        async ([FromServices] NewWarehouseStockSystem client, [FromBody] RetrieveStockRequest req) =>
         {
           var stock = await client.GetStock(req.ProductId);
           if (stock < req.Amount)
@@ -41,7 +42,7 @@ public static class CachedInventoryApiBuilder
             return Results.BadRequest("Not enough stock.");
           }
 
-          await client.UpdateStock(req.ProductId, stock - req.Amount);
+          await client.RetrieveStock(req.ProductId, req.Amount);
           return Results.Ok();
         })
       .WithName("RetrieveStock")
@@ -50,10 +51,9 @@ public static class CachedInventoryApiBuilder
 
     app.MapPost(
         "/stock/restock",
-        async ([FromServices] IWarehouseStockSystemClient client, [FromBody] RestockRequest req) =>
+        async ([FromServices] NewWarehouseStockSystem client, [FromBody] RestockRequest req) =>
         {
-          var stock = await client.GetStock(req.ProductId);
-          await client.UpdateStock(req.ProductId, req.Amount + stock);
+          await client.Restock(req.ProductId, req.Amount);
           return Results.Ok();
         })
       .WithName("Restock")
