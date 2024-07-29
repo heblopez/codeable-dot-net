@@ -1,10 +1,11 @@
 namespace CachedInventory;
 
 using System.Collections.Concurrent;
+using Microsoft.Extensions.Caching.Memory;
 
 public class NewWarehouseStockSystem
 {
-  private readonly ConcurrentDictionary<int, int> stockCache = new();
+  private readonly MemoryCache stockCache = new(new MemoryCacheOptions());
   private readonly ConcurrentDictionary<int, SemaphoreSlim> locks = new();
   private readonly IWarehouseStockSystemClient legacySystemClient;
 
@@ -15,10 +16,10 @@ public class NewWarehouseStockSystem
 
   public async Task<int> GetStock(int productId)
   {
-    if (!stockCache.TryGetValue(productId, out var stock))
+    if (!stockCache.TryGetValue(productId, out int stock))
     {
       stock = await legacySystemClient.GetStock(productId);
-      stockCache[productId] = stock;
+      stockCache.Set(productId, stock);
       locks.TryAdd(productId, new SemaphoreSlim(1, 1));
     }
 
@@ -32,7 +33,7 @@ public class NewWarehouseStockSystem
 
     try
     {
-      stockCache[productId] = newAmount;
+      stockCache.Set(productId, newAmount);
       _ = Task.Run(() => legacySystemClient.UpdateStock(productId, newAmount));
     }
     finally

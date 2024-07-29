@@ -36,14 +36,14 @@ public static class CachedInventoryApiBuilder
         "/stock/retrieve",
         async ([FromServices] NewWarehouseStockSystem client, [FromBody] RetrieveStockRequest req) =>
         {
-          var stock = await client.GetStock(req.ProductId);
-          if (stock < req.Amount)
+          var currentStock = await client.GetStock(req.ProductId);
+          if (currentStock < req.Amount)
           {
             return Results.BadRequest("Not enough stock.");
           }
-
-          await client.UpdateStock(req.ProductId, stock - req.Amount);
-          return Results.Ok();
+          var newStock = currentStock - req.Amount;
+          await client.UpdateStock(req.ProductId, newStock);
+          return Results.Ok(new { req.ProductId, Amount = newStock});
         })
       .WithName("RetrieveStock")
       .WithOpenApi();
@@ -53,9 +53,10 @@ public static class CachedInventoryApiBuilder
         "/stock/restock",
         async ([FromServices] NewWarehouseStockSystem client, [FromBody] RestockRequest req) =>
         {
-          var stock = await client.GetStock(req.ProductId);
-          await client.UpdateStock(req.ProductId, stock + req.Amount);
-          return Results.Ok();
+          var currentStock = await client.GetStock(req.ProductId);
+          var newStock = currentStock + req.Amount;
+          await client.UpdateStock(req.ProductId, newStock);
+          return Results.Ok(new { req.ProductId, Amount = newStock});
         })
       .WithName("Restock")
       .WithOpenApi();
