@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 public class NewWarehouseStockSystem: IDisposable
 {
   private readonly ConcurrentDictionary<int, int> stockCache = new();
+  private readonly ConcurrentDictionary<int, int> pendingUpdatesToLegacy = new();
   private readonly ConcurrentDictionary<int, SemaphoreSlim> locks = new();
   private readonly IWarehouseStockSystemClient legacySystemClient;
   private readonly Timer inactivityTimer;
@@ -45,6 +46,7 @@ public class NewWarehouseStockSystem: IDisposable
     try
     {
       stockCache[productId] = newAmount;
+      pendingUpdatesToLegacy[productId] = newAmount;
       inactivityTimer.Change(inactivityTimeout, Timeout.InfiniteTimeSpan);
       return newAmount;
     }
@@ -58,13 +60,14 @@ public class NewWarehouseStockSystem: IDisposable
     Task.Run(
       async () =>
       {
-        foreach (var entry in stockCache)
+        foreach (var entry in pendingUpdatesToLegacy)
         {
           var semaphore = locks.GetOrAdd(entry.Key, new SemaphoreSlim(1, 1));
           await semaphore.WaitAsync();
           try
           {
             await legacySystemClient.UpdateStock(entry.Key, entry.Value);
+            pendingUpdatesToLegacy.TryRemove(entry.Key, out _);
           }
           catch (Exception e)
           {
