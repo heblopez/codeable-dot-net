@@ -17,8 +17,8 @@ public class NewWarehouseStockSystem: IDisposable
     inactivityTimer = new Timer(
       OnInactivity,
       null,
-      Timeout.Infinite,
-      Timeout.Infinite
+      Timeout.InfiniteTimeSpan,
+      Timeout.InfiniteTimeSpan
     );
   }
 
@@ -65,7 +65,6 @@ public class NewWarehouseStockSystem: IDisposable
           try
           {
             await legacySystemClient.UpdateStock(entry.Key, entry.Value);
-            stockCache.TryRemove(entry.Key, out _);
           }
           catch (Exception e)
           {
