@@ -23,20 +23,7 @@ public class NewWarehouseStockSystem: IDisposable
     );
   }
 
-  public Task<int> GetStock(int productId)
-  {
-    if (stockCache.TryGetValue(productId, out var stock))
-    {
-      inactivityTimer.Change(inactivityTimeout, Timeout.InfiniteTimeSpan);
-      return Task.FromResult(stock);
-    }
-
-    stock = 0;
-    stockCache[productId] = stock;
-
-    inactivityTimer.Change(inactivityTimeout, Timeout.InfiniteTimeSpan);
-    return Task.FromResult(stock);
-  }
+  public Task<int> GetStock(int productId) => Task.FromResult(stockCache.GetOrAdd(productId, id => legacySystemClient.GetStock(id).Result));
 
   public async Task<int> UpdateStock(int productId, int newAmount)
   {
