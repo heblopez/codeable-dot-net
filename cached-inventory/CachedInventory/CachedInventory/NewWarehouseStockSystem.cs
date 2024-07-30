@@ -9,7 +9,7 @@ public class NewWarehouseStockSystem: IDisposable
   private readonly ConcurrentDictionary<int, SemaphoreSlim> locks = new();
   private readonly IWarehouseStockSystemClient legacySystemClient;
   private readonly Timer inactivityTimer;
-  private readonly TimeSpan inactivityTimeout = TimeSpan.FromMilliseconds(500);
+  private readonly TimeSpan inactivityTimeout = TimeSpan.FromMilliseconds(120);
   private readonly CancellationTokenSource cancellationTokenSource = new();
 
   public NewWarehouseStockSystem(IWarehouseStockSystemClient client)
@@ -23,19 +23,19 @@ public class NewWarehouseStockSystem: IDisposable
     );
   }
 
-  public async Task<int> GetStock(int productId)
+  public Task<int> GetStock(int productId)
   {
     if (stockCache.TryGetValue(productId, out var stock))
     {
       inactivityTimer.Change(inactivityTimeout, Timeout.InfiniteTimeSpan);
-      return stock;
+      return Task.FromResult(stock);
     }
 
-    stock = await legacySystemClient.GetStock(productId);
+    stock = 0;
     stockCache[productId] = stock;
 
     inactivityTimer.Change(inactivityTimeout, Timeout.InfiniteTimeSpan);
-    return stock;
+    return Task.FromResult(stock);
   }
 
   public async Task<int> UpdateStock(int productId, int newAmount)
