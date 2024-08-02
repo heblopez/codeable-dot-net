@@ -32,17 +32,43 @@ public class SevenRetrievalsSequentially
   public static async Task Test() => await TestApiPerformance.Test(5, [1, 2, 3, 4, 5, 6, 7], false, 500);
 }
 
+public class SingleRetrievalWithoutEnoughStock
+{
+  [Fact(DisplayName = "retirar un producto sin suficiente stock")]
+  public static async Task Test() => await TestApiPerformance.Test(6, [7], false, 2_000, 5);
+}
+
+public class SevenRetrievalsWithoutEnoughSequentially
+{
+  [Fact(DisplayName = "7 + 1 retiros sin suficiente stock secuencialmente")]
+  public static async Task Test() => await TestApiPerformance.Test(7, [1, 2, 3, 4, 5, 6, 7], false, 1_000, 3);
+}
+
+public class SevenRetrievalsWithoutEnoughStockinParallel
+{
+  [Fact(DisplayName = "7 + 1 retiros sin suficiente stock en paralelo")]
+  public static async Task Test() => await TestApiPerformance.Test(7, [1, 2, 3, 4, 5, 6, 7], true, 1_000, 3);
+}
+
 internal static class TestApiPerformance
 {
-  internal static async Task Test(int productId, int[] retrievals, bool isParallel, long expectedPerformance)
+  internal static async Task Test(int productId, int[] retrievals, bool isParallel, long expectedPerformance, int excessAmount = 0)
   {
     await using var setup = await TestSetup.Initialize();
     await setup.Restock(productId, retrievals.Sum());
     await setup.VerifyStockFromFile(productId, retrievals.Sum());
     var tasks = new List<Task>();
-    foreach (var retrieval in retrievals)
+    
+    if (excessAmount > 0)
     {
-      var task = setup.Retrieve(productId, retrieval);
+      retrievals = retrievals.Append(excessAmount).ToArray();
+    }
+    
+    for (var i = 0; i < retrievals.Length; i++)
+    {
+      var withError = (i == (retrievals.Length - 1) && excessAmount > 0);
+      var task = setup.Retrieve(productId, retrievals[i], withError);
+      
       if (!isParallel)
       {
         await task;

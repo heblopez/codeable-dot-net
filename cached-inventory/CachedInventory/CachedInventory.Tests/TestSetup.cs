@@ -69,7 +69,7 @@ public record TestSetup(string Url) : IAsyncDisposable
     }
   }
 
-  public async Task Retrieve(int productId, int amount)
+  public async Task Retrieve(int productId, int amount, bool withError = false)
   {
     var retrieveRequest = new { productId, amount };
     var retrieveRequestJson = JsonSerializer.Serialize(retrieveRequest);
@@ -79,7 +79,14 @@ public record TestSetup(string Url) : IAsyncDisposable
     var response = await Client.PostAsync($"{Url}stock/retrieve", retrieveRequestContent);
     stopwatch.Stop();
     requestDurations.Add(stopwatch.ElapsedMilliseconds);
-    Assert.True(response.IsSuccessStatusCode, $"Error al retirar el stock del producto {productId}.");
+    if (withError)
+    {
+      Assert.False(response.IsSuccessStatusCode, $"Error al permitir retirar stock del producto {productId} cuando no hay suficiente stock.");
+    }
+    else
+    {
+      Assert.True(response.IsSuccessStatusCode, $"Error al retirar el stock del producto {productId}."); 
+    }
   }
 
   private static int GetRandomPort() => Random.Next(30000) + 10000;
