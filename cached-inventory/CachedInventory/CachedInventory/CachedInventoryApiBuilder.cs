@@ -1,6 +1,7 @@
 namespace CachedInventory;
 
 using Microsoft.AspNetCore.Mvc;
+using StackExchange.Redis;
 
 public static class CachedInventoryApiBuilder
 {
@@ -12,8 +13,26 @@ public static class CachedInventoryApiBuilder
     // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen();
+    builder.Services.AddSingleton<ConnectionMultiplexer>(sp =>
+    {
+      var configuration = ConfigurationOptions.Parse("localhost:6379");
+      return ConnectionMultiplexer.Connect(configuration);
+    });
+    builder.Services.AddSingleton<RedisCache>();
+    builder.Services.AddSingleton<RedisEventStore>();
     builder.Services.AddSingleton<IWarehouseStockSystemClient, WarehouseStockSystemClient>();
     builder.Services.AddSingleton<NewWarehouseStockSystem>();
+    builder.Services.AddSingleton<UpdateBatcher>(sp =>
+    {
+      return new UpdateBatcher(TimeSpan.FromMilliseconds(100), async (productId, stockEvent) =>
+      {
+        await sp.GetRequiredService<IWarehouseStockSystemClient>().UpdateStock(productId, stockEvent.Amount);
+      });
+    });
+    builder.Services.AddHostedService<EventProcessingService>();
+    
+    // builder.Services.AddSingleton<EventStore>();
+    // builder.Services.AddSingleton<EventProcessor>();
 
     var app = builder.Build();
 
@@ -47,8 +66,7 @@ public static class CachedInventoryApiBuilder
         })
       .WithName("RetrieveStock")
       .WithOpenApi();
-
-
+    
     app.MapPost(
         "/stock/restock",
         async ([FromServices] NewWarehouseStockSystem client, [FromBody] RestockRequest req) =>

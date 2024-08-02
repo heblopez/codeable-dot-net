@@ -2,76 +2,28 @@ namespace CachedInventory;
 
 using System.Collections.Concurrent;
 
-public class NewWarehouseStockSystem: IDisposable
+public class NewWarehouseStockSystem(
+  IWarehouseStockSystemClient legacyClient,
+  RedisCache redisCache,
+  RedisEventStore eventStore)
 {
-  private readonly ConcurrentDictionary<int, int> stockCache = new();
-  private readonly ConcurrentDictionary<int, int> pendingUpdatesToLegacy = new();
-  private readonly ConcurrentDictionary<int, SemaphoreSlim> locks = new();
-  private readonly IWarehouseStockSystemClient legacySystemClient;
-  private readonly Timer inactivityTimer;
-  private readonly TimeSpan inactivityTimeout = TimeSpan.FromMilliseconds(120);
-  private readonly CancellationTokenSource cancellationTokenSource = new();
-
-  public NewWarehouseStockSystem(IWarehouseStockSystemClient client)
+  public async Task<int> GetStock(int productId)
   {
-    legacySystemClient = client;
-    inactivityTimer = new Timer(
-      OnInactivity,
-      null,
-      Timeout.InfiniteTimeSpan,
-      Timeout.InfiniteTimeSpan
-    );
-  }
+    var stock = await redisCache.GetStockAsync(productId);
+    if (stock == null)
+    {
+      var stockFromLegacy = await legacyClient.GetStock(productId);
+      await redisCache.SetStockAsync(productId, stockFromLegacy);
+    }
 
-  public Task<int> GetStock(int productId) => Task.FromResult(stockCache.GetOrAdd(productId, id => legacySystemClient.GetStock(id).Result));
+    return stock.Value;
+  }
 
   public async Task<int> UpdateStock(int productId, int newAmount)
   {
-    var semaphore = locks.GetOrAdd(productId, new SemaphoreSlim(1, 1));
-    await semaphore.WaitAsync();
-
-    try
-    {
-      stockCache[productId] = newAmount;
-      pendingUpdatesToLegacy[productId] = newAmount;
-      inactivityTimer.Change(inactivityTimeout, Timeout.InfiniteTimeSpan);
-      return newAmount;
-    }
-    finally
-    {
-      semaphore.Release();
-    }
-  }
-
-  private void OnInactivity(object? state) =>
-    Task.Run(
-      async () =>
-      {
-        foreach (var entry in pendingUpdatesToLegacy)
-        {
-          var semaphore = locks.GetOrAdd(entry.Key, new SemaphoreSlim(1, 1));
-          await semaphore.WaitAsync();
-          try
-          {
-            await legacySystemClient.UpdateStock(entry.Key, entry.Value);
-            pendingUpdatesToLegacy.TryRemove(entry.Key, out _);
-          }
-          catch (Exception e)
-          {
-            Console.WriteLine($"Error updating stock of product {entry.Key} to legacy system: {e.Message}");
-          }
-          finally
-          {
-            semaphore.Release();
-          }
-        }
-      }
-    );
-  
-  public void Dispose()
-  {
-    inactivityTimer.Dispose();
-    cancellationTokenSource.Cancel();
-    cancellationTokenSource.Dispose();
+    await redisCache.SetStockAsync(productId, newAmount);
+    var stockEvent = new StockEvent { ProductId = productId, Amount = newAmount, Timestamp = DateTime.Now };
+    eventStore.AddStockEvent(stockEvent);
+    return newAmount;
   }
 }
